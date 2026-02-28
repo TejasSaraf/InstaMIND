@@ -1,0 +1,46 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Environment / secrets
+.env
+**/.env
+**/.env.*
+!.env.example
+
+# Runtime output
+data/
+models/
+runs/
+logs/
+*.log
+
+# Datasets
+app/dataset/
+datasets/
+
+# ML artifacts
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.bin
+*.safetensors
+*.tflite
+*.keras
+*.h5
+*.npz
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/

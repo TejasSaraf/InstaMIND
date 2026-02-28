@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic-settings
+numpy>=1.26,<2.0
+opencv-python==4.10.0.84
+tensorflow-macos==2.16.2; platform_system == "Darwin" and platform_machine == "arm64"
+tensorflow-metal==1.2.0; platform_system == "Darwin" and platform_machine == "arm64"
+tensorflow==2.16.2; platform_system != "Darwin" or platform_machine != "arm64"
+langchain
+langchain-core
+langchain-google-genai
+google-generativeai
+grpcio-status==1.62.3
