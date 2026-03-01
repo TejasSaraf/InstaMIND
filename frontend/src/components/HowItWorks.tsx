@@ -1,3 +1,9 @@
+function StepBadge({ step }: { step: number }) {
+  return (
+    <span className="text-sm font-bold text-teal-400">{step}</span>
+  )
+}
+
 const steps = [
   {
     step: 1,
@@ -18,7 +24,7 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section className="rounded-2xl border border-blue-800/50 bg-blue-950/30 px-6 py-8 shadow-xl shadow-blue-950/20">
+    <section className="rounded-2xl border border-neutral-800 bg-neutral-950 px-6 py-8 shadow-xl">
       <h2 className="text-lg font-semibold text-white mb-6 text-center">
         How it works
       </h2>
@@ -26,13 +32,13 @@ export function HowItWorks() {
         {steps.map(({ step, title, description }) => (
           <div
             key={step}
-            className="relative rounded-xl border border-blue-800/50 bg-blue-950/50 p-4 shadow-lg shadow-blue-950/10"
+            className="relative rounded-xl border border-neutral-800 bg-neutral-900/50 p-4"
           >
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center text-sm font-bold mb-3 shadow-lg shadow-blue-500/30">
-              {step}
+            <div className="w-8 h-8 rounded-lg bg-neutral-800 border border-neutral-600 text-teal-400 flex items-center justify-center mb-3">
+              <StepBadge step={step} />
             </div>
             <h3 className="font-medium text-white mb-1">{title}</h3>
-            <p className="text-sm text-blue-200/80 leading-relaxed">
+            <p className="text-sm text-neutral-400 leading-relaxed">
               {description}
             </p>
           </div>
