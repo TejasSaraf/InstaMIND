@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     pose_event_model_path: str = "models/pose_event_detector.keras"
     pose_event_label_path: str = "models/pose_event_labels.json"
 
+    # Tunable decision thresholds (helps reduce shoplifting->fainting confusion).
+    threshold_fainting_fast: float = 0.8
+    threshold_choking_fast: float = 0.65
+    threshold_violent_fast: float = 0.7
+    threshold_shoplifting_fast: float = 0.55
+
+    guardrail_shoplifting_min: float = 0.5
+    guardrail_fainting_max: float = 0.45
+
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""

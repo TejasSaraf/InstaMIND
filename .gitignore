@@ -1,0 +1,65 @@
+# ----------------------------
+# OS / editor junk
+# ----------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ----------------------------
+# Python / backend
+# ----------------------------
+backend/.venv/
+backend/venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/.python-version
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.coverage
+backend/htmlcov/
+
+# Secret env files (keep template tracked)
+backend/.env
+backend/**/.env
+backend/**/.env.*
+!backend/.env.example
+
+# Runtime/storage outputs
+backend/data/
+backend/models/
+backend/runs/
+backend/logs/
+backend/**/*.log
+
+# Large/local ML artifacts
+backend/**/*.pt
+backend/**/*.pth
+backend/**/*.ckpt
+backend/**/*.onnx
+backend/**/*.bin
+backend/**/*.safetensors
+backend/**/*.tflite
+backend/**/*.keras
+backend/**/*.h5
+backend/**/*.npz
+
+# ----------------------------
+# Frontend / node
+# ----------------------------
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/coverage/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# ----------------------------
+# Misc
+# ----------------------------
+*.tmp
+*.temp

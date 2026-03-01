@@ -43,5 +43,8 @@ class StorageService:
     def list_reports(self) -> list[dict[str, Any]]:
         reports = []
         for file_path in sorted(self.reports.glob("*.json"), reverse=True):
-            reports.append(json.loads(file_path.read_text(encoding="utf-8")))
+            try:
+                reports.append(json.loads(file_path.read_text(encoding="utf-8")))
+            except (json.JSONDecodeError, OSError):
+                continue
         return reports
