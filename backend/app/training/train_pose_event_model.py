@@ -13,6 +13,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--labels-out", default="models/pose_event_labels.json", help="Output labels json path")
     parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--weighted", action="store_true", help="Use inverse-frequency class weights")
     return parser.parse_args()
 
 
@@ -45,6 +47,12 @@ def main() -> None:
     if len(X) == 0:
         raise ValueError("Empty dataset after preprocessing.")
 
+    rng = np.random.default_rng(args.seed)
+    idx = np.arange(len(X))
+    rng.shuffle(idx)
+    X = X[idx]
+    y = y[idx]
+
     split = int(0.85 * len(X))
     X_train, X_val = X[:split], X[split:]
     y_train, y_val = y[:split], y[split:]
@@ -55,6 +63,14 @@ def main() -> None:
     callbacks = [
         tf.keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=5, restore_best_weights=True),
     ]
+    class_weight = None
+    if args.weighted:
+        counts = np.bincount(y_train, minlength=len(labels)).astype(np.float32)
+        counts[counts == 0] = 1.0
+        total = float(np.sum(counts))
+        class_weight = {i: total / (len(labels) * float(counts[i])) for i in range(len(labels))}
+        print("Using class weights:", class_weight)
+
     model.fit(
         X_train,
         y_train,
@@ -62,6 +78,7 @@ def main() -> None:
         epochs=args.epochs,
         batch_size=args.batch_size,
         callbacks=callbacks,
+        class_weight=class_weight,
         verbose=2,
     )
 

@@ -18,9 +18,16 @@ class PoseEventDetector:
 
         model_file = Path(model_path)
         labels_file = Path(label_path)
+        print(f"[PoseEventDetector] model_path={model_file.resolve()} exists={model_file.exists()}")
+        print(f"[PoseEventDetector] label_path={labels_file.resolve()} exists={labels_file.exists()}")
         if model_file.exists() and labels_file.exists():
-            self.model = tf.keras.models.load_model(model_file)
-            self.labels = json.loads(labels_file.read_text(encoding="utf-8"))
+            try:
+                self.model = tf.keras.models.load_model(model_file)
+                self.labels = json.loads(labels_file.read_text(encoding="utf-8"))
+                print(f"[PoseEventDetector] Loaded OK — labels={self.labels}")
+            except Exception as e:
+                print(f"[PoseEventDetector] FAILED to load: {e}")
+                self.model = None
 
     def available(self) -> bool:
         return self.model is not None and bool(self.labels)
@@ -42,6 +49,11 @@ class PoseEventDetector:
         }
 
     def _build_window(self, signals: dict) -> np.ndarray:
+        """
+        Build (1, window_size, 53) to match training: 17*3 keypoints + motion + audio.
+        At runtime we have no keypoints; we use horizontal_series, motion_series, distress
+        in the same slots as training (keypoints 0..50 zeroed, motion at 51, audio at 52).
+        """
         pose = signals.get("pose", {})
         video = signals.get("video", {})
         audio = signals.get("audio", {})
@@ -50,18 +62,12 @@ class PoseEventDetector:
         motion_series = np.array(video.get("motion_series", []), dtype=np.float32)
         distress_score = float(audio.get("distress_score", 0.0))
 
-        features = np.zeros((self.window_size, 6), dtype=np.float32)
+        # Training shape: (batch, 32, 53) with 0..50 = keypoints, 51 = motion, 52 = audio
+        features = np.zeros((self.window_size, 53), dtype=np.float32)
         for i in range(self.window_size):
             hs = horizontal_series[i] if i < len(horizontal_series) else 0.0
             ms = motion_series[i] if i < len(motion_series) else 0.0
-            prev_hs = horizontal_series[i - 1] if 0 < i < len(horizontal_series) else hs
-            prev_ms = motion_series[i - 1] if 0 < i < len(motion_series) else ms
-            features[i] = [
-                hs,
-                ms / 50.0,
-                (hs - prev_hs),
-                (ms - prev_ms) / 50.0,
-                distress_score,
-                float(i) / float(max(1, self.window_size - 1)),
-            ]
+            features[i, 0] = hs
+            features[i, 51] = ms
+            features[i, 52] = distress_score
         return np.expand_dims(features, axis=0)

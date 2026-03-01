@@ -14,7 +14,12 @@ class AlertNotifier:
         severe = [
             i
             for i in report.incidents
-            if i.incident_type in {IncidentType.fainting, IncidentType.choking, IncidentType.violent_activity}
+            if i.incident_type in {
+                IncidentType.fainting,
+                IncidentType.choking,
+                IncidentType.violent_activity,
+                IncidentType.shoplifting,
+            }
             and i.confidence >= 0.6
         ]
         if not severe:

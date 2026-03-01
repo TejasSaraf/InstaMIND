@@ -10,13 +10,16 @@ from app.schemas import Incident, IncidentReport, IncidentType
 from app.services.local_gemma_client import LocalGemmaClient
 from app.services.pose_event_detector import PoseEventDetector
 
+STRIP_TYPES = {IncidentType.fainting, IncidentType.choking}
+
 
 class IncidentAnalysisAgent:
     """
-    Agentic analyzer:
-      1) Observe multi-modal signals (video/audio proxies + TensorFlow posture)
-      2) Reason about threats
-      3) Emit incidents + timeline + actions
+    Agentic analyzer focused on shoplifting / suspicious-activity detection.
+    Pipeline:
+      1. Fast-path TF pose detector (primary signal)
+      2. Signal-context heuristics (boost / fallback)
+      3. LoRA-tuned LLM for evidence enrichment only
     """
 
     def __init__(self) -> None:
@@ -28,18 +31,56 @@ class IncidentAnalysisAgent:
 
     def analyze(self, source_filename: str, signals: dict, processing_time_ms: float) -> IncidentReport:
         signals["fast_path"] = self.pose_event_detector.predict(signals)
-        incidents = self._local_reasoning(signals)
-        if settings.model_mode == "local_gemma":
-            incidents = self.local_gemma_client.refine_incidents(signals, incidents)
+        fast_path = signals.get("fast_path", {})
+
+        if settings.model_mode == "gemini" and settings.gemini_api_key and (not settings.offline_mode):
+            incidents = self._gemini_primary_classify(signals)
+            if not incidents:
+                incidents = self._detect_shoplifting(signals, fast_path)
+        elif settings.model_mode == "local_gemma" and self.local_gemma_client.available():
+            incidents = self._detect_shoplifting(signals, fast_path)
+        else:
+            incidents = self._detect_shoplifting(signals, fast_path)
+
+        incidents = [i for i in incidents if i.incident_type not in STRIP_TYPES]
+
+        # Final hard filter: never emit fainting or choking (shoplifting-only pipeline)
+        incidents = [i for i in incidents if i.incident_type not in (IncidentType.fainting, IncidentType.choking)]
+
+        if not incidents:
+            incidents.append(
+                Incident(
+                    incident_type=IncidentType.none,
+                    confidence=0.8,
+                    timestamp_seconds=0.0,
+                    evidence="No severe event detected from current multimodal signals.",
+                    recommended_action="Continue monitoring.",
+                )
+            )
+
+        # Last-line safety: never expose fainting/choking to API (shoplifting-only pipeline)
+        def _sanitize(inc: Incident) -> Incident:
+            if inc.incident_type in (IncidentType.fainting, IncidentType.choking):
+                return Incident(
+                    incident_type=IncidentType.none,
+                    confidence=0.8,
+                    timestamp_seconds=inc.timestamp_seconds,
+                    evidence="No critical event (pipeline is shoplifting-only).",
+                    recommended_action="Continue monitoring.",
+                )
+            return inc
+
+        incidents = [_sanitize(i) for i in incidents]
+
         summary = self._build_summary(incidents)
         timeline = [
             {
-                "t": incident.timestamp_seconds,
-                "type": incident.incident_type.value,
-                "confidence": incident.confidence,
-                "note": incident.evidence,
+                "t": inc.timestamp_seconds,
+                "type": inc.incident_type.value,
+                "confidence": inc.confidence,
+                "note": inc.evidence,
             }
-            for incident in incidents
+            for inc in incidents
         ]
 
         return IncidentReport(
@@ -57,145 +98,164 @@ class IncidentAnalysisAgent:
             raw_signals=signals,
         )
 
-    def _local_reasoning(self, signals: dict) -> list[Incident]:
+    def _detect_shoplifting(self, signals: dict, fast_path: dict) -> list[Incident]:
+        """
+        Shoplifting-focused detection combining TF detector + signal heuristics.
+        LLM is used only for evidence enrichment.
+        """
         video = signals.get("video", {})
         pose = signals.get("pose", {})
         audio = signals.get("audio", {})
-
+        horizontal = float(pose.get("horizontal_posture_score", 0.0))
         motion_mean = float(video.get("motion_mean", 0.0))
         motion_std = float(video.get("motion_std", 0.0))
-        horizontal_score = float(pose.get("horizontal_posture_score", 0.0))
-        area_change_mean = float(pose.get("area_change_mean", 0.0))
-        audio_distress_score = float(audio.get("distress_score", 0.0))
-        fast_path = signals.get("fast_path", {})
+        distress = float(audio.get("distress_score", 0.0))
+        area_change = float(pose.get("area_change_mean", 0.0))
+
+        fast_available = fast_path.get("available", False)
         fast_probs = fast_path.get("event_probs", {})
+        shoplifting_prob = float(fast_probs.get("shoplifting", 0.0))
+        suspicious_prob = float(fast_probs.get("suspicious_activity", 0.0))
+        none_prob = float(fast_probs.get("none", 1.0))
 
-        incidents: list[Incident] = []
+        incident_type = IncidentType.none
+        confidence = 0.0
+        evidence_parts: list[str] = []
 
-        if fast_path.get("available"):
-            faint_prob = float(fast_probs.get("fainting", 0.0))
-            choke_prob = float(fast_probs.get("choking", 0.0))
-            violent_prob = float(fast_probs.get("violent_activity", 0.0))
-            if faint_prob >= 0.65:
-                incidents.append(
-                    Incident(
-                        incident_type=IncidentType.fainting,
-                        confidence=min(0.99, faint_prob),
-                        timestamp_seconds=1.0,
-                        evidence="Fast-path pose detector triggered fainting pattern.",
-                        recommended_action="Dispatch nearby security/medical responder immediately.",
-                    )
-                )
-            if choke_prob >= 0.65:
-                incidents.append(
-                    Incident(
-                        incident_type=IncidentType.choking,
-                        confidence=min(0.99, choke_prob),
-                        timestamp_seconds=1.0,
-                        evidence="Fast-path pose detector triggered choking/distress pattern.",
-                        recommended_action="Issue immediate emergency alert and request human confirmation.",
-                    )
-                )
-            if violent_prob >= 0.7:
-                incidents.append(
-                    Incident(
-                        incident_type=IncidentType.violent_activity,
-                        confidence=min(0.99, violent_prob),
-                        timestamp_seconds=1.0,
-                        evidence="Fast-path pose detector triggered violent motion pattern.",
-                        recommended_action="Trigger high-priority security escalation.",
-                    )
+        if fast_available:
+            n_classes = max(len(fast_probs), 1)
+            uniform = 1.0 / n_classes
+
+            if shoplifting_prob > uniform:
+                incident_type = IncidentType.shoplifting
+                confidence = shoplifting_prob
+
+                if distress < 0.3:
+                    confidence += 0.30
+                if horizontal < 0.8:
+                    confidence += 0.10
+                if motion_mean > 0.5:
+                    confidence += 0.10
+
+                confidence = min(0.95, confidence)
+                evidence_parts.append(
+                    f"TF pose detector: shoplifting={shoplifting_prob:.1%}, "
+                    f"suspicious={suspicious_prob:.1%}, none={none_prob:.1%}. "
+                    f"Signal boost applied (distress={distress:.2f}, horizontal={horizontal:.2f}, motion={motion_mean:.1f})."
                 )
 
-        if horizontal_score > 0.65 and motion_mean < 12:
-            incidents.append(
+            elif suspicious_prob > uniform and suspicious_prob > none_prob:
+                incident_type = IncidentType.suspicious_activity
+                confidence = min(0.85, suspicious_prob + 0.25)
+                evidence_parts.append(f"TF pose detector flagged suspicious activity ({suspicious_prob:.1%}).")
+
+        if incident_type == IncidentType.none:
+            if motion_mean > 0.5 and distress < 0.3 and horizontal < 0.85:
+                incident_type = IncidentType.shoplifting
+                confidence = min(0.80, 0.50 + motion_mean / 15)
+                evidence_parts.append(
+                    f"Signal heuristic: person is upright (h={horizontal:.2f}), "
+                    f"moving (motion={motion_mean:.1f}), no distress ({distress:.2f}) — retail anomaly pattern."
+                )
+            elif motion_mean > 10 and motion_std > 8:
+                incident_type = IncidentType.violent_activity
+                confidence = min(0.90, 0.4 + motion_std / 40)
+                evidence_parts.append("Abrupt high-variance motion pattern observed.")
+
+        if incident_type != IncidentType.none and confidence >= 0.4:
+            llm_evidence, llm_action = self._get_llm_evidence(signals, incident_type)
+            if llm_evidence:
+                evidence_parts.append(f"LLM: {llm_evidence}")
+
+            action = llm_action or self._default_action(incident_type)
+
+            return [
                 Incident(
-                    incident_type=IncidentType.fainting,
-                    confidence=min(0.95, 0.45 + horizontal_score / 2),
-                    timestamp_seconds=2.0,
-                    evidence="Body posture became horizontal while movement dropped.",
-                    recommended_action="Dispatch nearby security/medical responder immediately.",
+                    incident_type=incident_type,
+                    confidence=confidence,
+                    timestamp_seconds=1.5,
+                    evidence=" ".join(evidence_parts),
+                    recommended_action=action,
                 )
-            )
+            ]
 
-        if motion_mean > 18 and motion_std > 14:
-            incidents.append(
-                Incident(
-                    incident_type=IncidentType.violent_activity,
-                    confidence=min(0.92, 0.4 + motion_std / 40),
-                    timestamp_seconds=3.5,
-                    evidence="Abrupt high-variance motion pattern observed.",
-                    recommended_action="Trigger high-priority security escalation.",
-                )
-            )
-        elif motion_mean > 10:
-            incidents.append(
-                Incident(
-                    incident_type=IncidentType.suspicious_activity,
-                    confidence=min(0.88, 0.35 + motion_mean / 35),
-                    timestamp_seconds=4.0,
-                    evidence="Sustained movement anomaly relative to baseline.",
-                    recommended_action="Monitor in real-time and notify floor guard.",
-                )
-            )
+        return []
 
-        if audio_distress_score > 0.6 or area_change_mean > 12000:
-            incidents.append(
-                Incident(
-                    incident_type=IncidentType.choking,
-                    confidence=min(0.9, 0.4 + max(audio_distress_score, 0.3)),
-                    timestamp_seconds=5.0,
-                    evidence="Distress-like audio/respiration proxy spike detected.",
-                    recommended_action="Issue immediate emergency alert and request human confirmation.",
-                )
-            )
+    def _get_llm_evidence(self, signals: dict, detected_type: IncidentType) -> tuple[str, str]:
+        """Ask the LoRA-tuned LLM for evidence text. Returns (evidence, action)."""
+        if not self.local_gemma_client.available():
+            return "", ""
+        try:
+            summary_text = self._build_multimodal_summary(signals)
+            incidents = self.local_gemma_client.primary_classify(summary_text)
+            if incidents:
+                return incidents[0].evidence, incidents[0].recommended_action
+        except Exception:
+            pass
+        return "", ""
 
-        if not incidents:
-            incidents.append(
-                Incident(
-                    incident_type=IncidentType.none,
-                    confidence=0.8,
-                    timestamp_seconds=0.0,
-                    evidence="No severe event detected from current multimodal signals.",
-                    recommended_action="Continue monitoring.",
-                )
-            )
+    @staticmethod
+    def _default_action(incident_type: IncidentType) -> str:
+        actions = {
+            IncidentType.shoplifting: "Track subject, notify nearby staff, and retain camera evidence.",
+            IncidentType.suspicious_activity: "Monitor in real-time and notify floor guard.",
+            IncidentType.violent_activity: "Trigger high-priority security escalation.",
+            IncidentType.intrusion: "Alert security team immediately.",
+        }
+        return actions.get(incident_type, "Continue monitoring.")
 
-        if settings.model_mode == "gemini" and (not settings.offline_mode):
-            incidents = self._augment_with_gemini_reasoning(signals, incidents)
-
-        return incidents
-
-    def _augment_with_gemini_reasoning(self, signals: dict, baseline: list[Incident]) -> list[Incident]:
+    def _gemini_primary_classify(self, signals: dict) -> list[Incident]:
         if not settings.gemini_api_key:
-            return baseline
-
-        prompt = ChatPromptTemplate.from_template(
-            "You are a security incident reasoning agent.\n"
-            "Input multimodal signals:\n{signals}\n\n"
-            "Given baseline incidents:\n{baseline}\n\n"
-            "Return ONLY a strict JSON list with fields: incident_type, confidence, timestamp_seconds, evidence, recommended_action.\n"
-            "Allowed incident_type: fainting, choking, violent_activity, suspicious_activity, intrusion, none.\n"
+            return []
+        summary_text = self._build_multimodal_summary(signals)
+        prompt = (
+            "You are the primary security incident classifier. Use ONLY the multimodal summary below.\n\n"
+            "RULES:\n"
+            "- Choose the SINGLE most likely incident type.\n"
+            "- Focus on: shoplifting, suspicious_activity, violent_activity, or none.\n"
+            "- Shoplifting = concealment, item handling, retail context, person leaving without paying.\n"
+            "- Do NOT classify as fainting or choking.\n"
+            "- Return ONLY a JSON array with exactly one object: {\"incident_type\", \"confidence\", \"timestamp_seconds\", \"evidence\", \"recommended_action\"}.\n"
+            "Allowed incident_type: shoplifting, suspicious_activity, violent_activity, intrusion, none.\n\n"
+            f"MULTIMODAL SUMMARY:\n{summary_text}\n\n"
+            "JSON array:"
         )
         llm = ChatGoogleGenerativeAI(
             model=settings.gemini_model_name,
             google_api_key=settings.gemini_api_key,
             temperature=0.1,
         )
-        chain = prompt | llm
-
         try:
-            result = chain.invoke(
-                {
-                    "signals": json.dumps(signals, default=str),
-                    "baseline": json.dumps([x.model_dump() for x in baseline], default=str),
-                }
-            )
+            result = llm.invoke(prompt)
             content = getattr(result, "content", "")
             parsed = self._parse_llm_incidents(content)
-            return parsed or baseline
+            return parsed if parsed else []
         except Exception:
-            return baseline
+            return []
+
+    @staticmethod
+    def _build_multimodal_summary(signals: dict) -> str:
+        v = signals.get("video", {})
+        p = signals.get("pose", {})
+        a = signals.get("audio", {})
+        fps = v.get("fps", 0)
+        duration = v.get("duration_seconds", 0)
+        motion_mean = v.get("motion_mean", 0)
+        motion_std = v.get("motion_std", 0)
+        brightness = v.get("brightness_mean", 0)
+        horizontal = p.get("horizontal_posture_score", 0)
+        area_change = p.get("area_change_mean", 0)
+        audio_distress = a.get("distress_score", 0)
+        lines = [
+            f"Video: fps={fps:.1f}, duration_sec={duration:.1f}, motion_mean={motion_mean:.2f}, motion_std={motion_std:.2f}, brightness_mean={brightness:.1f}.",
+            f"Body pose (TensorFlow): horizontal_posture_score={horizontal:.2f} (1=lying/collapsed), area_change_mean={area_change:.0f}.",
+            f"Audio: distress_score={audio_distress:.2f} (high=distress/coughing).",
+        ]
+        fast = signals.get("fast_path", {})
+        if fast.get("available") and fast.get("event_probs"):
+            probs = fast["event_probs"]
+            lines.append(f"Fast detector probs: {json.dumps(probs, indent=0)}.")
+        return "\n".join(lines)
 
     @staticmethod
     def _parse_llm_incidents(content: str) -> list[Incident]:
@@ -206,6 +266,8 @@ class IncidentAnalysisAgent:
                 text = text[4:].strip()
 
         payload = json.loads(text)
+        if isinstance(payload, dict):
+            payload = [payload]
         if not isinstance(payload, list):
             return []
 
@@ -218,6 +280,9 @@ class IncidentAnalysisAgent:
                 incident_type = IncidentType(raw_type)
             except ValueError:
                 incident_type = IncidentType.none
+
+            if incident_type in STRIP_TYPES:
+                continue
 
             incidents.append(
                 Incident(

@@ -1,0 +1,4 @@
+FROM qwen2:0.5b-instruct
+ADAPTER /Users/tejassaraf/Projects/instaMIND/backend/adapter
+SYSTEM "You are InstaMIND incident reasoning model. Always return strict JSON list with fields: incident_type, confidence, timestamp_seconds, evidence, recommended_action."
+PARAMETER temperature 0.1

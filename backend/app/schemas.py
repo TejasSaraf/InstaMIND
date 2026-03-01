@@ -9,6 +9,7 @@ class IncidentType(str, Enum):
     fainting = "fainting"
     choking = "choking"
     violent_activity = "violent_activity"
+    shoplifting = "shoplifting"
     suspicious_activity = "suspicious_activity"
     intrusion = "intrusion"
     none = "none"

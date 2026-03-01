@@ -7,32 +7,63 @@ import { Toast } from '../components/Toast'
 import { HistorySidebar, type HistoryItem } from '../components/HistorySidebar'
 import { HowItWorks } from '../components/HowItWorks'
 
-const API_BASE = ''
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? 'http://localhost:8000' : '')
+).replace(/\/$/, '')
 
-type Video = {
-  id: number
-  originalName: string
-  url: string
-  mimeType: string | null
-  size: number
-  createdAt: string
+type ApiIncident = {
+  incident_type: string
+  confidence: number
+  timestamp_seconds: number
+  evidence: string
+  recommended_action: string
 }
 
-function generatePlaceholderResult(videoName: string): ResultData {
+type ApiReport = {
+  report_id: string
+  source_filename: string
+  created_at: string
+  processing_time_ms: number
+  met_latency_target: boolean
+  summary: string
+  incidents: ApiIncident[]
+  raw_signals?: {
+    latency?: {
+      p95_ms?: number
+      max_ms?: number
+      violations?: number
+    }
+  }
+}
+
+function reportToResult(report: ApiReport): ResultData {
+  const incidentLines = report.incidents
+    .filter((x) => x.incident_type !== 'none')
+    .slice(0, 4)
+    .map(
+      (x) =>
+        `${x.incident_type} (${Math.round(x.confidence * 100)}%) at ${x.timestamp_seconds.toFixed(1)}s: ${x.evidence}`,
+    )
+
+  const latency = report.raw_signals?.latency
+  const latencyLine = latency
+    ? `Frame latency p95 ${Number(latency.p95_ms || 0).toFixed(1)}ms, max ${Number(latency.max_ms || 0).toFixed(1)}ms, violations ${latency.violations || 0}.`
+    : `Upload analysis latency ${report.processing_time_ms.toFixed(1)}ms.`
+
   return {
-    videoName,
-    summary: `This video "${videoName}" has been processed. A full summary and key insights will appear here once analysis is connected. For now, this is a placeholder to show the result layout.`,
+    videoName: report.source_filename,
+    summary: report.summary,
     insights: [
-      'Video uploaded and stored successfully.',
-      'Metadata saved for future analysis.',
-      'You can revisit this result from the history sidebar.',
+      latencyLine,
+      `Latency target met: ${report.met_latency_target ? 'Yes' : 'No'}.`,
+      ...(incidentLines.length > 0 ? incidentLines : ['No critical incidents detected.']),
     ],
   }
 }
 
 export function UploadVideo() {
   const mainRef = useRef<HTMLDivElement>(null)
-  const [videos, setVideos] = useState<Video[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [processing, setProcessing] = useState(false)
   const [drag, setDrag] = useState(false)
@@ -40,20 +71,30 @@ export function UploadVideo() {
   const [currentResult, setCurrentResult] = useState<ResultData | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>([])
 
-  const fetchVideos = useCallback(async () => {
+  const fetchReports = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/videos`)
-      if (!res.ok) throw new Error('Failed to load videos')
-      const data = await res.json()
-      setVideos(data)
+      const res = await fetch(`${API_BASE}/api/v1/reports`)
+      if (!res.ok) throw new Error('Failed to load reports')
+      const data = (await res.json()) as { reports?: ApiReport[] }
+      const reports = data.reports || []
+      const mapped: HistoryItem[] = reports.map((report) => ({
+        id: report.report_id,
+        videoName: report.source_filename,
+        createdAt: report.created_at,
+        result: reportToResult(report),
+      }))
+      setHistory(mapped)
     } catch {
-      setToast({ type: 'error', message: 'Could not load videos' })
+      setToast({
+        type: 'error',
+        message: 'Could not load reports. Is the backend running? Start it with: cd backend && python -m uvicorn app.main:app --port 8000',
+      })
     }
   }, [])
 
   useEffect(() => {
-    fetchVideos()
-  }, [fetchVideos])
+    fetchReports()
+  }, [fetchReports])
 
   const scrollToInput = () => {
     mainRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -94,27 +135,25 @@ export function UploadVideo() {
     setCurrentResult(null)
 
     const form = new FormData()
-    form.append('video', file)
+    form.append('file', file)
     try {
-      const res = await fetch(`${API_BASE}/api/videos`, { method: 'POST', body: form })
+      const res = await fetch(`${API_BASE}/api/v1/analyze/upload`, { method: 'POST', body: form })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
+      if (!res.ok) throw new Error(data.detail || data.error || 'Upload failed')
 
-      setVideos((prev) => [data, ...prev])
+      const report = data.report as ApiReport
+      const result = reportToResult(report)
       setSelectedFile(null)
-
-      await new Promise((r) => setTimeout(r, 1500))
-      const result = generatePlaceholderResult(file.name)
       setCurrentResult(result)
 
       const historyItem: HistoryItem = {
-        id: `result-${Date.now()}`,
-        videoName: file.name,
-        createdAt: new Date().toISOString(),
+        id: report.report_id,
+        videoName: report.source_filename,
+        createdAt: report.created_at,
         result,
       }
       setHistory((prev) => [historyItem, ...prev])
-      setToast({ type: 'success', message: 'Video uploaded and processed' })
+      setToast({ type: 'success', message: 'Video analyzed successfully' })
     } catch (e) {
       setToast({ type: 'error', message: e instanceof Error ? e.message : 'Upload failed' })
     } finally {
@@ -168,37 +207,6 @@ export function UploadVideo() {
       <div className="mt-12">
         <HowItWorks />
       </div>
-
-      {videos.length > 0 && (
-        <section className="mt-12">
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Your videos
-          </h2>
-          <ul className="space-y-3">
-            {videos.slice(0, 5).map((v) => (
-              <li
-                key={v.id}
-                className="rounded-xl border border-blue-800/50 bg-blue-950/40 p-4 flex flex-col sm:flex-row sm:items-center gap-3 shadow-lg shadow-blue-950/10"
-              >
-                <video
-                  src={v.url}
-                  controls
-                  className="w-full sm:w-40 h-24 object-cover rounded-lg bg-blue-900"
-                  preload="metadata"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-blue-100 truncate">
-                    {v.originalName}
-                  </p>
-                  <p className="text-blue-200/60 text-sm">
-                    {new Date(v.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   )
 }
