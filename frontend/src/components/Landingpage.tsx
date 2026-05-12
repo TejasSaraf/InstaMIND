@@ -380,7 +380,7 @@ export default function Landing({ authError, googleButtonRef }: LandingProps) {
           <div className="mt-12 pt-8 border-t border-white/5 text-left">
             <p className="text-sm text-neutral-500 mb-3">
               Built by{" "}
-              <span className="text-white font-medium">Tejas Saraf</span>
+              <span className="text-white font-medium">Tejas Saraf and Darshan Deshmukh</span>
             </p>
             <div className="flex items-center gap-4">
               <a
