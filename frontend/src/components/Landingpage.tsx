@@ -142,7 +142,7 @@ export default function Landing({ authError, googleButtonRef }: LandingProps) {
               className="pointer-events-none absolute -left-[9999px] top-0 h-10 w-[110px] overflow-hidden opacity-0"
             />
             <a
-              href="/instaMIND_Demo.mov"
+              href="https://github.com/TejasSaraf/InstaMIND#readme"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400"

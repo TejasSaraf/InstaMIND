@@ -1,8 +1,6 @@
 # instaMIND
 
-<video src="frontend/public/instaMIND_Demo.mov" controls muted width="100%"></video>
-
-[Watch the demo video](frontend/public/instaMIND_Demo.mov)
+[![Watch the instaMIND demo](https://img.youtube.com/vi/zAtyOGOH0Uo/maxresdefault.jpg)](https://youtu.be/zAtyOGOH0Uo)
 
 **AI security operators for every camera feed.** instaMIND watches CCTV feeds on-device, detects critical incidents, and routes alerts in under two seconds without uploading surveillance video to the cloud.
 
