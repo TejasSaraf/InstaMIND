@@ -1,5 +1,66 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
 :root {
   --color-brand: oklch(78.9% 0.154 211.53);
+  --gradient-purple: linear-gradient(
+    135deg,
+    #f57f17 0%,
+    #bf6817 30%,
+    #d37203 70%,
+    #eab948 100%
+  );
+}
+
+html,
+body,
+#root {
+  min-height: 100vh;
+}
+
+body {
+  font-family: var(--font-sans);
+  margin: 0;
+}
+
+.text-gradient-purple {
+  background: var(--gradient-purple);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+.hero-bg {
+  position: relative;
+  background-color: #050508;
+  background-image: radial-gradient(
+    circle at bottom left,
+    rgba(168, 85, 247, 0.2) 0%,
+    transparent 50%
+  );
+  isolation: isolate;
+}
+
+.hero-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+
+  background: radial-gradient(
+    ellipse 72% 58% at 50% 42%,
+    transparent 0%,
+    rgba(5, 5, 8, 0.2) 50%,
+    rgba(5, 5, 8, 0.92) 100%
+  );
 }

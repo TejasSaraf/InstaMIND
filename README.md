@@ -1,52 +1,135 @@
-# InstaMIND
+# instaMIND
 
-**On-device video intelligence for retail and security.** InstaMIND analyzes video (upload or stream) and detects incidents such as shoplifting in real time—with sub-100ms latency targets and no video leaving the device.
+<video src="frontend/public/instaMIND_Demo.mov" controls muted width="100%"></video>
 
----
+[Watch the demo video](frontend/public/instaMIND_Demo.mov)
 
-## Features
-
-- **On-device analysis** — Video stays on your machine; no cloud upload required
-- **Fast-path detection** — TensorFlow pose/event model for low-latency classification (shoplifting, suspicious activity, none)
-- **Optional LLM layer** — LoRA-tuned small model for human-readable evidence and recommendations (served locally via PEFT or Ollama)
-- **Privacy-first** — Works offline; suitable for sensitive environments (retail, schools, offices)
+**AI security operators for every camera feed.** instaMIND watches CCTV feeds on-device, detects critical incidents, and routes alerts in under two seconds without uploading surveillance video to the cloud.
 
 ---
 
-## Tech stack
+## Why instaMIND
 
-| Layer      | Stack |
-|-----------|--------|
-| Frontend  | React 19, Vite, TypeScript, Tailwind CSS |
-| Backend   | FastAPI (Python), Uvicorn |
-| ML        | TensorFlow (pose/event classifier), optional PEFT/LLM (e.g. Qwen2) for evidence text |
-| Storage   | Local filesystem (uploads, reports, alerts) |
+Security teams have more cameras than attention. A store, school, or public venue can have dozens of feeds, but one human operator still has to notice fights, robberies, medical collapses, shoplifting, or weapons in real time.
+
+instaMIND adds a local AI operator on top of existing camera infrastructure. It watches every feed, detects people and incidents, explains what happened, and helps route the next action from a single dashboard.
 
 ---
 
-## Quick start
+## What It Does
+
+- **Live camera dashboard**: renders multiple CCTV/demo feeds with camera health, online/offline state, recent incidents, and lightweight human bounding boxes.
+- **Realtime detection**: runs human detection on live webcam/WebRTC streams and overlays green bounding boxes continuously.
+- **Video upload analysis**: analyzes uploaded videos frame-by-frame and surfaces model-generated scene summaries and key moments.
+- **On-device incident classification**: uses local vision inference to classify scenes into security-relevant incident types.
+- **Agentic response flow**: supports escalation actions such as warnings, alerts, and continued monitoring.
+- **Privacy-first architecture**: video is processed locally; no cloud video upload is required for inference.
+
+---
+
+## Core Capabilities
+
+| Capability | Description |
+| --- | --- |
+| Incident analysis | Local Gemma 3 / llama.cpp vision pipeline for frame-level incident classification |
+| Dashboard monitoring | Multi-feed dashboard with live camera status and incident controls |
+| Realtime stream | Browser camera/WebRTC feed with continuous frame detection |
+| Video upload | Upload a video and run on-device frame analysis |
+| Authentication | Google sign-in with backend token verification and user storage |
+
+---
+
+## Tech Stack
+
+| Layer | Stack |
+| --- | --- |
+| Frontend | React 19, Vite, TypeScript, Tailwind CSS |
+| Backend | FastAPI, Python, Uvicorn |
+| Vision detection | OpenCV DNN, YOLOv4-tiny |
+| Local vision LLM | llama.cpp / Gemma 3 style local vision client |
+| Training | QLoRA / FunctionGemma routing experiments, dataset generation scripts |
+| Native acceleration | C++ / pybind11 OpenCV extensions for video frame extraction and analysis |
+| Storage | Local filesystem for reports, uploads, model outputs, and generated artifacts |
+
+---
+
+## Project Structure
+
+```text
+instaMIND/
+├── backend/
+│   ├── app/
+│   │   ├── main.py                         # FastAPI app and API routes
+│   │   ├── config.py                       # Runtime configuration
+│   │   ├── orchestrator.py                 # Analysis orchestration
+│   │   ├── schemas.py                      # API response/request schemas
+│   │   ├── services/
+│   │   │   ├── human_detector.py           # YOLO human detection service
+│   │   │   ├── llamacpp_vision_client.py   # Local vision inference client
+│   │   │   ├── realtime_stream.py          # WebSocket stream handling
+│   │   │   ├── user_store.py               # User persistence
+│   │   │   └── video_normalize.py          # Video normalization helpers
+│   │   └── training/                       # Dataset + fine-tuning utilities
+│   ├── cpp_extensions/                     # Native OpenCV / pybind11 extensions
+│   ├── scripts/                            # Training and data pipeline scripts
+│   └── requirements.txt
+├── frontend/
+│   ├── public/
+│   │   ├── instaMIND_Demo.mov              # README demo video
+│   │   └── data-videos -> ../../data/videos
+│   ├── src/
+│   │   ├── components/                     # Landing page, navbar, UI components
+│   │   ├── pages/                          # Dashboard, Realtime, UploadVideo
+│   │   └── types.ts
+│   └── package.json
+├── data/                                   # Local videos and annotations
+└── README.md
+```
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
-- **Node.js** 18+ (for frontend)
-- **Python** 3.10+ (for backend)
-- **Optional:** Ollama or the project’s PEFT server for local LLM evidence
+- Node.js 18+
+- Python 3.10+
+- OpenCV-compatible environment
+- YOLOv4-tiny model files for human detection:
+  - `backend/models/yolov4-tiny.cfg`
+  - `backend/models/yolov4-tiny.weights`
 
-### 1. Backend
+Download YOLOv4-tiny files:
+
+```bash
+mkdir -p backend/models
+wget https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4-tiny.cfg -P backend/models
+wget https://github.com/AlexeyAB/darknet/releases/download/yolov4/yolov4-tiny.weights -P backend/models
+```
+
+### 1. Start the Backend
 
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # edit .env if needed (see backend/.env.example)
-mkdir -p data/uploads data/reports data/alerts
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Backend runs at **http://localhost:8000**. Health check: `curl http://localhost:8000/health`
+Backend runs at:
 
-### 2. Frontend
+```text
+http://localhost:8000
+```
+
+Health check:
+
+```bash
+curl http://localhost:8000/health
+```
+
+### 2. Start the Frontend
 
 ```bash
 cd frontend
@@ -54,76 +137,105 @@ npm install
 npm run dev
 ```
 
-Frontend runs at **http://localhost:5173** (or the port Vite prints). Set `VITE_API_BASE_URL=http://localhost:8000` in `frontend/.env` if the API is on another host.
+Frontend runs at:
 
-### 3. Optional: local LLM (evidence text)
+```text
+http://localhost:5173
+```
 
-To use the fine-tuned model for evidence and recommendations:
+If the backend runs somewhere else, create `frontend/.env`:
 
-**Option A — PEFT server (no Ollama):**
+```env
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+---
+
+## API Overview
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/health` | Backend health and local model status |
+| `GET` | `/api/v1/positioning` | Product positioning metadata |
+| `POST` | `/api/v1/detect/frame` | Detect humans in one base64 JPEG frame |
+| `POST` | `/api/v1/analyze/frame` | Analyze one frame using local vision inference |
+| `GET` | `/api/v1/reports` | List locally stored reports |
+| `GET` | `/api/v1/reports/{report_id}` | Load one report |
+| `POST` | `/api/v1/auth/google` | Verify Google ID token and upsert user |
+| `GET` | `/api/v1/auth/users/{user_id}` | Check stored authenticated user |
+| `WS` | `/api/v1/stream` | Realtime stream WebSocket endpoint |
+
+---
+
+## Environment Variables
+
+### Backend
+
+Create `backend/.env` as needed for local model and auth settings. Common values:
+
+```env
+GOOGLE_OAUTH_CLIENT_ID=...
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+MODEL_MODE=local_gemma
+LOCAL_GEMMA_ENDPOINT=http://127.0.0.1:8080
+LOCAL_GEMMA_MODEL_NAME=...
+```
+
+### Frontend
+
+Create `frontend/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_GOOGLE_CLIENT_ID=...
+```
+
+---
+
+## Training and Model Utilities
+
+The repository includes training and data preparation scripts under:
+
+```text
+backend/app/training/
+backend/scripts/
+backend/scripts/data_pipeline/
+```
+
+Current utilities include:
+
+- Function-calling dataset generation for routing response tools
+- Gemma 3 / FunctionGemma fine-tuning experiments
+- Data parsing, augmentation, balancing, splitting, and verification
+- Vision path verification and deployment helpers
+- Native C++ video frame extraction and analysis utilities
+
+---
+
+## Build and Verification
+
+Frontend production build:
+
+```bash
+npm --prefix frontend run build
+```
+
+Backend import/health smoke test:
 
 ```bash
 cd backend
-pip install torch peft transformers accelerate
-python scripts/serve_peft_model.py --base-model Qwen/Qwen2-0.5B-Instruct --adapter-dir ./adapter --port 11434
-```
-
-**Option B — Ollama:** install Ollama, pull a base model, then use `app/training/export_to_ollama.py` if you have an adapter.
-
-In `backend/.env` set:
-
-- `MODEL_MODE=local_gemma`
-- `LOCAL_GEMMA_ENDPOINT=http://127.0.0.1:11434/api/generate`
-- `LOCAL_GEMMA_MODEL_NAME=instamind-shoplifting` (or your model name)
-
----
-
-## Project structure
-
-```
-instaMIND/
-├── backend/                 # FastAPI app
-│   ├── app/
-│   │   ├── main.py          # Routes, upload, reports
-│   │   ├── config.py        # Settings
-│   │   ├── schemas.py       # API models
-│   │   ├── services/        # Analysis, pose detector, LLM client, storage
-│   │   ├── training/        # Fine-tuning and dataset scripts (optional)
-│   │   └── models/          # Pose event detector weights + labels
-│   ├── scripts/
-│   │   ├── serve_peft_model.py   # Local PEFT server (Ollama-compatible API)
-│   │   └── GPU_FINETUNE_RUNBOOK.md
-│   └── requirements.txt
-├── frontend/                # React app
-│   ├── src/
-│   │   ├── pages/           # UploadVideo, etc.
-│   │   └── components/      # Navbar, Hero, InputBox, ResultCard, …
-│   └── package.json
-├── presentation/            # 2-minute pitch slide deck (HTML)
-├── PRESENTATION_2MIN.md     # Slide content + timing for PowerPoint/Google Slides
-└── README.md                # This file
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+curl http://localhost:8000/health
 ```
 
 ---
 
-## API overview
+## Notes
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET    | `/health` | Health check |
-| POST   | `/api/v1/analyze/upload` | Upload video, run analysis, return report |
-| GET    | `/api/v1/reports` | List reports |
-| GET    | `/api/v1/reports/{id}` | Get report by ID |
+- The dashboard demo videos are served from `frontend/public/data-videos`, which symlinks to `data/videos`.
+- Human detection requires the YOLOv4-tiny model files in `backend/models`.
+- Autoplaying demo videos in browsers must be muted, which is why the landing page demo runs muted by default.
+- The project is designed around local inference and privacy-preserving security workflows.
 
 ---
-
-## Training and fine-tuning
-
-- **Pose/event model:** See `backend/app/training/` (e.g. `train_pose_event_model.py`) and dataset under `backend/app/dataset/`.
-- **LLM fine-tuning (QLoRA):** See `backend/scripts/GPU_FINETUNE_RUNBOOK.md` and `backend/app/training/finetune_gemma_qlora.py` for running on a GPU VM and exporting the adapter for local use.
-
----
-
-## License
-
-Private / internal use unless otherwise specified.

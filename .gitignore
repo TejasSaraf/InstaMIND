@@ -2,39 +2,72 @@
 # OS / editor junk
 # ----------------------------
 .DS_Store
+**/.DS_Store
 .idea/
 .vscode/
 *.swp
 *.swo
+*.bak
 
 # ----------------------------
 # Python / backend
 # ----------------------------
+__pycache__/
+**/__pycache__/
 backend/.venv/
 backend/venv/
 backend/__pycache__/
 backend/**/*.pyc
 backend/**/*.pyo
+*.py[cod]
 backend/.python-version
 backend/.pytest_cache/
 backend/.mypy_cache/
 backend/.coverage
 backend/htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
 
 # Secret env files (keep template tracked)
+.env
+.env.*
+!.env.example
 backend/.env
 backend/**/.env
 backend/**/.env.*
 !backend/.env.example
 
 # Runtime/storage outputs
-backend/data/
+data/
 backend/models/
+backend/adapter/
+backend/outputs/
 backend/runs/
 backend/logs/
+backend/scripts/build/
+backend/scripts/.cache/
+backend/**/.cache/
 backend/**/*.log
+*.log
 
 # Large/local ML artifacts
+*.gguf
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.bin
+*.safetensors
+*.tflite
+*.keras
+*.h5
+*.npz
 backend/**/*.pt
 backend/**/*.pth
 backend/**/*.ckpt
@@ -46,17 +79,37 @@ backend/**/*.keras
 backend/**/*.h5
 backend/**/*.npz
 
+# Native extension build products
+backend/cpp_extensions/build/
+backend/cpp_extensions/*.so
+backend/cpp_extensions/*.dylib
+backend/cpp_extensions/*.dll
+backend/cpp_extensions/*.egg-info/
+*.o
+*.so
+*.dylib
+*.dll
+
 # ----------------------------
 # Frontend / node
 # ----------------------------
+node_modules/
 frontend/node_modules/
+frontend/public/dataset
+frontend/public/data-videos
 frontend/dist/
 frontend/dist-ssr/
 frontend/.vite/
 frontend/coverage/
+frontend/*.tsbuildinfo
+frontend/**/*.tsbuildinfo
 frontend/.env
 frontend/.env.*
 !frontend/.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # ----------------------------
 # Misc

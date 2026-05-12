@@ -4,6 +4,7 @@ python-multipart
 pydantic-settings
 numpy>=1.26,<2.0
 opencv-python==4.10.0.84
+ultralytics==8.3.43
 tensorflow-macos==2.16.2; platform_system == "Darwin" and platform_machine == "arm64"
 tensorflow-metal==1.2.0; platform_system == "Darwin" and platform_machine == "arm64"
 tensorflow==2.16.2; platform_system != "Darwin" or platform_machine != "arm64"
@@ -12,3 +13,22 @@ langchain-core
 langchain-google-genai
 google-generativeai
 grpcio-status==1.62.3
+google-auth
+openai>=1.0.0
+supabase
+librosa==0.10.2.post1
+soundfile==0.12.1
+mlx-lm; platform_system == "Darwin" and platform_machine == "arm64"
+
+# ---- Gemma 3N fine-tuning (google/gemma-3n-e2b-it via Unsloth QLoRA) ----
+torch>=2.4.0
+torchvision>=0.19.0
+timm>=1.0.8
+transformers>=4.53.1          # Gemma3nForConditionalGeneration added in 4.53.0
+peft>=0.13.0                  # all-linear LoRA targets + VLM support
+bitsandbytes>=0.44.0; platform_system != "Darwin"  # quant_state fix for on-the-fly 4-bit
+accelerate>=1.0.0             # VLM data-parallel fixes
+datasets>=2.20.0
+trl>=0.12.0                   # stable SFTConfig + skip_prepare_dataset
+Pillow>=10.0.0
+safetensors>=0.4.0

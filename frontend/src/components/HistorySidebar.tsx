@@ -1,33 +1,43 @@
-import type { ResultData } from './ResultCard'
+import type { ResultData } from "./ResultCard";
 
 function IconHistory({ className }: { className?: string }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
     </svg>
-  )
+  );
 }
 
 export type HistoryItem = {
-  id: string
-  videoName: string
-  createdAt: string
-  result?: ResultData
-}
+  id: string;
+  videoName: string;
+  createdAt: string;
+  result?: ResultData;
+};
 
 type HistorySidebarProps = {
-  items: HistoryItem[]
-  onSelect: (item: HistoryItem) => void
-}
+  items: HistoryItem[];
+  onSelect: (item: HistoryItem) => void;
+};
 
 export function HistorySidebar({ items, onSelect }: HistorySidebarProps) {
-  if (items.length === 0) return null
+  if (items.length === 0) return null;
 
   return (
     <aside className="rounded-2xl border border-neutral-800 bg-neutral-950 shadow-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-neutral-800 flex items-center gap-2">
         <IconHistory className="w-4 h-4 text-neutral-500 shrink-0" />
-        <h3 className="text-sm font-semibold text-neutral-200">
+        <h3 className="text-sm font-semibold text-gradient-purple">
           Previous results
         </h3>
       </div>
@@ -50,5 +60,5 @@ export function HistorySidebar({ items, onSelect }: HistorySidebarProps) {
         ))}
       </ul>
     </aside>
-  )
+  );
 }
